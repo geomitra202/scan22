@@ -1,90 +1,87 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Closest BLE Device Scanner</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Nearest BLE Device</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      text-align: center;
-      margin-top: 60px;
-      background-color: #f5f5f5;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      background: #f2f2f2;
+      color: #333;
     }
-    #scanBtn {
+    button {
       padding: 12px 24px;
-      font-size: 18px;
+      font-size: 16px;
       border: none;
       background-color: #007bff;
       color: white;
       border-radius: 8px;
       cursor: pointer;
     }
+    button:hover {
+      background-color: #0056b3;
+    }
     #result {
-      margin-top: 30px;
-      font-size: 20px;
+      margin-top: 20px;
+      font-size: 18px;
+      background: #fff;
+      padding: 16px;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
   </style>
 </head>
 <body>
 
-  <h1>📡 Closest BLE Device</h1>
-  <button id="scanBtn">Scan</button>
-
-  <div id="result">No device scanned yet</div>
+  <button onclick="scan()">Scan for Nearest Device</button>
+  <div id="result">No device scanned yet.</div>
 
   <script>
-    document.getElementById("scanBtn").addEventListener("click", async () => {
-      const resultEl = document.getElementById("result");
-      resultEl.textContent = "Scanning...";
+    async function scan() {
+      const options = {
+        acceptAllAdvertisements: true
+      };
 
       try {
-        const seenDevices = new Map();
-
-        const options = {
-          acceptAllAdvertisements: true,
-          keepRepeatedDevices: true
-        };
+        const resultBox = document.getElementById("result");
+        resultBox.textContent = "Scanning...";
+        const devices = new Map();
 
         const scan = await navigator.bluetooth.requestLEScan(options);
 
         navigator.bluetooth.addEventListener('advertisementreceived', event => {
-          const name = event.device.name || event.name || "Unnamed";
-          const rssi = event.rssi;
+          const name = event.device.name || event.name;
+          if (!name) return; // ❌ Ignore unnamed
 
-          // OPTIONAL: skip unnamed devices
-          // if (!name || name === "Unnamed") return;
+          devices.set(event.device.id, {
+            name: name,
+            rssi: event.rssi
+          });
 
-          if (!seenDevices.has(name) || rssi > seenDevices.get(name).rssi) {
-            seenDevices.set(name, { rssi });
-          }
-
-          // Find device with highest RSSI
-          let closest = null;
-          for (const [deviceName, data] of seenDevices.entries()) {
-            if (!closest || data.rssi > closest.rssi) {
-              closest = { name: deviceName, rssi: data.rssi };
-            }
-          }
-
-          if (closest) {
-            resultEl.innerHTML = `
-              <strong>Closest Device:</strong><br>
-              📛 Name: <b>${closest.name}</b><br>
-              📶 RSSI: <b>${closest.rssi} dBm</b>
-            `;
-          }
+          // Get the closest device with a name
+          const sorted = [...devices.values()].sort((a, b) => b.rssi - a.rssi);
+          const closest = sorted[0];
+          resultBox.textContent = `📡 Closest Named Device: ${closest.name} (RSSI: ${closest.rssi} dBm)`;
         });
 
-        // Stop scan after 10 seconds
+        // Stop scanning after 10 seconds
         setTimeout(() => {
           scan.stop();
-          resultEl.innerHTML += "<br><br>✅ Scan complete.";
+          console.log("Scan stopped");
         }, 10000);
 
       } catch (err) {
-        console.error(err);
-        resultEl.textContent = "❌ Error: " + err.message;
+        console.error("Scan failed", err);
+        document.getElementById("result").textContent = "❌ Scan failed or blocked.";
       }
-    });
+    }
   </script>
+
 </body>
 </html>
