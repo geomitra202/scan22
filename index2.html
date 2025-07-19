@@ -2,83 +2,108 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Closest BLE Device</title>
+  <title>Top Closest BLE Devices</title>
   <style>
     body {
-      font-family: Arial, sans-serif;
-      background: #f9f9f9;
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f4f6f8;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       height: 100vh;
+      margin: 0;
     }
 
     button {
-      background: #007bff;
-      color: #fff;
-      padding: 12px 24px;
-      font-size: 16px;
+      background-color: #007bff;
+      color: white;
       border: none;
+      padding: 14px 28px;
+      font-size: 16px;
       border-radius: 8px;
       cursor: pointer;
     }
 
     button:hover {
-      background: #0056b3;
+      background-color: #0056b3;
     }
 
-    #result {
-      margin-top: 20px;
-      font-size: 18px;
-      background: #fff;
-      padding: 16px;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-      min-width: 280px;
-      text-align: center;
+    #results {
+      margin-top: 30px;
+      padding: 20px;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      min-width: 300px;
+    }
+
+    .device {
+      margin-bottom: 10px;
+    }
+
+    .device-name {
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
 
-  <button onclick="scanClosest()">Scan Closest Device</button>
-  <div id="result">Waiting for scan...</div>
+  <button onclick="scanTopDevices()">🔍 Scan Top 3 Closest Devices</button>
+  <div id="results">No scan yet.</div>
 
   <script>
-    async function scanClosest() {
-      const resultBox = document.getElementById("result");
-      resultBox.textContent = "🔍 Scanning...";
+    async function scanTopDevices(topN = 3, scanTime = 5000) {
+      const results = document.getElementById("results");
+      results.textContent = "🔍 Scanning for nearby devices...";
+
+      const deviceRSSIMap = new Map();
 
       try {
-        const options = { acceptAllAdvertisements: true };
-        const devices = [];
-
-        const scan = await navigator.bluetooth.requestLEScan(options);
+        const scan = await navigator.bluetooth.requestLEScan({ acceptAllAdvertisements: true });
 
         navigator.bluetooth.addEventListener('advertisementreceived', event => {
           const name = event.device.name || event.name;
-          if (!name) return; // ❌ Ignore unnamed devices
+          if (!name) return; // Ignore unnamed devices
 
-          devices.push({ name, rssi: event.rssi });
+          const id = event.device.id;
+          if (!deviceRSSIMap.has(id)) {
+            deviceRSSIMap.set(id, { name, rssiSamples: [] });
+          }
+          deviceRSSIMap.get(id).rssiSamples.push(event.rssi);
         });
 
         setTimeout(() => {
           scan.stop();
 
-          const namedDevices = devices.filter(d => d.name);
-          if (namedDevices.length === 0) {
-            resultBox.textContent = "❌ No named devices found.";
+          const processedDevices = Array.from(deviceRSSIMap.values())
+            .map(device => {
+              const avgRSSI = device.rssiSamples.reduce((a, b) => a + b, 0) / device.rssiSamples.length;
+              return { name: device.name, avgRSSI: Math.round(avgRSSI) };
+            })
+            .sort((a, b) => b.avgRSSI - a.avgRSSI) // Highest RSSI (closest) first
+            .slice(0, topN);
+
+          if (processedDevices.length === 0) {
+            results.textContent = "❌ No named devices found.";
             return;
           }
 
-          const closest = namedDevices.reduce((a, b) => a.rssi > b.rssi ? a : b);
-          resultBox.textContent = `📡 Closest Device: ${closest.name} (RSSI: ${closest.rssi} dBm)`;
-        }, 5000);
+          results.innerHTML = `<h3>📡 Top ${topN} Closest Devices</h3>`;
+          processedDevices.forEach(d => {
+            results.innerHTML += `
+              <div class="device">
+                <div class="device-name">${d.name}</div>
+                <div>📶 Avg RSSI: ${d.avgRSSI} dBm</div>
+              </div>
+            `;
+          });
+
+        }, scanTime);
 
       } catch (err) {
         console.error(err);
-        resultBox.textContent = "⚠️ Bluetooth scan failed or not supported.";
+        results.textContent = "⚠️ Bluetooth scanning not supported or cancelled.";
       }
     }
   </script>
