@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Nearby Bluetooth Devices (Sorted by Closeness)</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2rem;
+      background: #f9f9f9;
+      text-align: center;
+    }
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+    #deviceList {
+      margin-top: 30px;
+      text-align: left;
+      max-width: 500px;
+      margin-inline: auto;
+    }
+    .device-item {
+      background: white;
+      padding: 15px;
+      margin-bottom: 10px;
+      border-radius: 8px;
+      box-shadow: 0 0 8px rgba(0,0,0,0.1);
+    }
+    .signal-bar {
+      height: 10px;
+      background: green;
+      border-radius: 4px;
+      margin-top: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Bluetooth Device Scanner</h1>
+  <button onclick="scanDevices()">🔍 Scan Nearby Devices</button>
+  <p id="status">Click the button to start scanning.</p>
+  <div id="deviceList"></div>
+
+  <script>
+    async function scanDevices() {
+      const status = document.getElementById("status");
+      const deviceList = document.getElementById("deviceList");
+      deviceList.innerHTML = "";
+      status.textContent = "🔄 Scanning for 5 seconds...";
+
+      try {
+        const devices = [];
+
+        const scan = await navigator.bluetooth.requestLEScan({
+          acceptAllAdvertisements: true
+        });
+
+        navigator.bluetooth.addEventListener('advertisementreceived', event => {
+          const name = event.device.name || event.name || "Unnamed";
+          const rssi = event.rssi;
+
+          const existing = devices.find(d => d.name === name);
+          if (!existing || rssi > existing.rssi) {
+            devices.push({ name, rssi });
+          }
+        });
+
+        setTimeout(() => {
+          scan.stop();
+          if (devices.length === 0) {
+            status.textContent = "⚠️ No Bluetooth devices found.";
+            return;
+          }
+
+          // Sort by RSSI descending (strongest signal first)
+          devices.sort((a, b) => b.rssi - a.rssi);
+
+          status.textContent = `✅ Found ${devices.length} device(s):`;
+
+          devices.forEach(device => {
+            const strength = Math.max(0, Math.min(100, 100 + device.rssi)); // Normalize
+            const item = document.createElement("div");
+            item.className = "device-item";
+            item.innerHTML = `
+              <strong>${device.name}</strong><br>
+              RSSI: ${device.rssi}<br>
+              <div class="signal-bar" style="width: ${strength}%; background-color: ${strength > 66 ? 'green' : strength > 33 ? 'orange' : 'red'};"></div>
+            `;
+            deviceList.appendChild(item);
+          });
+
+        }, 5000);
+
+      } catch (error) {
+        status.textContent = "❌ Error: " + error.message;
+        deviceList.innerHTML = "";
+      }
+    }
+  </script>
+</body>
+</html>
