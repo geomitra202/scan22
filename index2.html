@@ -2,83 +2,83 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Nearest Bluetooth Device</title>
+  <title>Closest BLE Device</title>
   <style>
     body {
       font-family: Arial, sans-serif;
+      background: #f9f9f9;
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       height: 100vh;
-      background-color: #f0f4f8;
-      margin: 0;
     }
+
     button {
+      background: #007bff;
+      color: #fff;
       padding: 12px 24px;
       font-size: 16px;
       border: none;
-      background-color: #007bff;
-      color: white;
       border-radius: 8px;
       cursor: pointer;
     }
+
     button:hover {
-      background-color: #0056b3;
+      background: #0056b3;
     }
+
     #result {
       margin-top: 20px;
       font-size: 18px;
+      background: #fff;
       padding: 16px;
-      background-color: #fff;
       border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      min-width: 280px;
+      text-align: center;
     }
   </style>
 </head>
 <body>
 
-  <button onclick="scanForNearest()">🔍 Scan for Nearest Device</button>
-  <div id="result">No device scanned yet.</div>
+  <button onclick="scanClosest()">Scan Closest Device</button>
+  <div id="result">Waiting for scan...</div>
 
   <script>
-    async function scanForNearest() {
+    async function scanClosest() {
       const resultBox = document.getElementById("result");
-      resultBox.textContent = "Scanning...";
+      resultBox.textContent = "🔍 Scanning...";
 
       try {
         const options = { acceptAllAdvertisements: true };
-        const deviceMap = new Map();
+        const devices = [];
 
         const scan = await navigator.bluetooth.requestLEScan(options);
 
         navigator.bluetooth.addEventListener('advertisementreceived', event => {
           const name = event.device.name || event.name;
-          if (!name) return; // Skip unnamed devices
+          if (!name) return; // ❌ Ignore unnamed devices
 
-          const existing = deviceMap.get(event.device.id);
-          if (!existing || event.rssi > existing.rssi) {
-            deviceMap.set(event.device.id, { name, rssi: event.rssi });
-          }
+          devices.push({ name, rssi: event.rssi });
         });
 
         setTimeout(() => {
           scan.stop();
 
-          if (deviceMap.size === 0) {
-            resultBox.textContent = "❌ No named devices found nearby.";
+          const namedDevices = devices.filter(d => d.name);
+          if (namedDevices.length === 0) {
+            resultBox.textContent = "❌ No named devices found.";
             return;
           }
 
-          // Pick closest (highest RSSI)
-          const closest = [...deviceMap.values()].reduce((a, b) => a.rssi > b.rssi ? a : b);
-          resultBox.textContent = `📡 Nearest Device: ${closest.name} (RSSI: ${closest.rssi} dBm)`;
+          const closest = namedDevices.reduce((a, b) => a.rssi > b.rssi ? a : b);
+          resultBox.textContent = `📡 Closest Device: ${closest.name} (RSSI: ${closest.rssi} dBm)`;
         }, 5000);
 
-      } catch (error) {
-        console.error("Scan error:", error);
-        resultBox.textContent = "❌ Bluetooth scan failed or not supported.";
+      } catch (err) {
+        console.error(err);
+        resultBox.textContent = "⚠️ Bluetooth scan failed or not supported.";
       }
     }
   </script>
