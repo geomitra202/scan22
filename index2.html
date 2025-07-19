@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Top BLE Devices by Proximity</title>
+  <title>Closest Table BLE Devices</title>
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
-      background-color: #f4f6f8;
+      background-color: #f0f2f5;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -62,32 +62,37 @@
 </head>
 <body>
 
-  <button onclick="scanTopDevices()">🔍 Scan Top 3 Closest Devices</button>
+  <button onclick="scanTables()">🔍 Scan for Closest 'Table i'</button>
   <div id="results">Click scan to start.</div>
 
   <script>
-    async function scanTopDevices(topN = 3, scanTime = 5000) {
+    async function scanTables(topN = 3, scanTime = 5000) {
       const results = document.getElementById("results");
 
-      // 1. Check if browser supports Web Bluetooth
       if (!navigator.bluetooth || !navigator.bluetooth.requestLEScan) {
-        results.textContent = "❌ Your browser does not support Web Bluetooth API.";
+        results.textContent = "❌ Your browser does not support Web Bluetooth.";
         return;
       }
 
       try {
-        results.textContent = "🔍 Scanning for nearby devices...";
+        results.textContent = "🔍 Scanning for Table devices...";
+
         const deviceRSSIMap = new Map();
 
-        // 2. Start BLE scan (will prompt user)
         const scan = await navigator.bluetooth.requestLEScan({
           acceptAllAdvertisements: true
         });
 
-        // 3. Handle advertisement packets
         navigator.bluetooth.addEventListener('advertisementreceived', event => {
           const name = event.device.name || event.name;
-          if (!name) return; // Ignore unnamed
+          if (!name) return;
+
+          // ✅ Match names like "Table 1" to "Table 300"
+          const match = name.match(/^Table\s+(\d{1,3})$/);
+          if (!match) return;
+
+          const tableNumber = parseInt(match[1]);
+          if (tableNumber < 1 || tableNumber > 300) return;
 
           const id = event.device.id;
           if (!deviceRSSIMap.has(id)) {
@@ -96,7 +101,6 @@
           deviceRSSIMap.get(id).rssiSamples.push(event.rssi);
         });
 
-        // 4. Stop after scanTime ms
         setTimeout(() => {
           scan.stop();
 
@@ -105,16 +109,15 @@
               const avgRSSI = device.rssiSamples.reduce((a, b) => a + b, 0) / device.rssiSamples.length;
               return { name: device.name, avgRSSI: Math.round(avgRSSI) };
             })
-            .sort((a, b) => b.avgRSSI - a.avgRSSI)
+            .sort((a, b) => b.avgRSSI - a.avgRSSI) // Strongest (closest) first
             .slice(0, topN);
 
           if (processedDevices.length === 0) {
-            results.textContent = "❌ No named BLE devices found.";
+            results.textContent = "❌ No nearby 'Table i' devices found.";
             return;
           }
 
-          // 5. Show Results
-          results.innerHTML = `<h3>📡 Top ${topN} Closest Devices</h3>`;
+          results.innerHTML = `<h3>📡 Top ${topN} Closest Table Devices</h3>`;
           processedDevices.forEach(d => {
             results.innerHTML += `
               <div class="device">
@@ -129,7 +132,7 @@
       } catch (error) {
         console.error("Bluetooth scan error:", error);
         if (error.name === 'NotFoundError' || error.message.includes("Bluetooth adapter")) {
-          results.textContent = "⚠️ Please turn on Bluetooth and allow scanning.";
+          results.textContent = "⚠️ Please turn on Bluetooth and try again.";
         } else if (error.name === 'NotAllowedError') {
           results.textContent = "⚠️ Permission denied. Please allow Bluetooth access.";
         } else {
