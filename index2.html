@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Top Closest BLE Devices</title>
+  <title>Top BLE Devices by Proximity</title>
   <style>
     body {
       font-family: 'Segoe UI', sans-serif;
@@ -36,35 +36,58 @@
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       min-width: 300px;
+      max-width: 90%;
     }
 
     .device {
-      margin-bottom: 10px;
+      margin-bottom: 15px;
+      border-bottom: 1px solid #e0e0e0;
+      padding-bottom: 10px;
+    }
+
+    .device:last-child {
+      border-bottom: none;
     }
 
     .device-name {
       font-weight: bold;
+      font-size: 18px;
+    }
+
+    .rssi {
+      font-size: 14px;
+      color: #555;
     }
   </style>
 </head>
 <body>
 
   <button onclick="scanTopDevices()">🔍 Scan Top 3 Closest Devices</button>
-  <div id="results">No scan yet.</div>
+  <div id="results">Click scan to start.</div>
 
   <script>
     async function scanTopDevices(topN = 3, scanTime = 5000) {
       const results = document.getElementById("results");
-      results.textContent = "🔍 Scanning for nearby devices...";
 
-      const deviceRSSIMap = new Map();
+      // 1. Check if browser supports Web Bluetooth
+      if (!navigator.bluetooth || !navigator.bluetooth.requestLEScan) {
+        results.textContent = "❌ Your browser does not support Web Bluetooth API.";
+        return;
+      }
 
       try {
-        const scan = await navigator.bluetooth.requestLEScan({ acceptAllAdvertisements: true });
+        results.textContent = "🔍 Scanning for nearby devices...";
+        const deviceRSSIMap = new Map();
 
+        // 2. Start BLE scan (will prompt user)
+        const scan = await navigator.bluetooth.requestLEScan({
+          acceptAllAdvertisements: true
+        });
+
+        // 3. Handle advertisement packets
         navigator.bluetooth.addEventListener('advertisementreceived', event => {
           const name = event.device.name || event.name;
-          if (!name) return; // Ignore unnamed devices
+          if (!name) return; // Ignore unnamed
 
           const id = event.device.id;
           if (!deviceRSSIMap.has(id)) {
@@ -73,6 +96,7 @@
           deviceRSSIMap.get(id).rssiSamples.push(event.rssi);
         });
 
+        // 4. Stop after scanTime ms
         setTimeout(() => {
           scan.stop();
 
@@ -81,29 +105,36 @@
               const avgRSSI = device.rssiSamples.reduce((a, b) => a + b, 0) / device.rssiSamples.length;
               return { name: device.name, avgRSSI: Math.round(avgRSSI) };
             })
-            .sort((a, b) => b.avgRSSI - a.avgRSSI) // Highest RSSI (closest) first
+            .sort((a, b) => b.avgRSSI - a.avgRSSI)
             .slice(0, topN);
 
           if (processedDevices.length === 0) {
-            results.textContent = "❌ No named devices found.";
+            results.textContent = "❌ No named BLE devices found.";
             return;
           }
 
+          // 5. Show Results
           results.innerHTML = `<h3>📡 Top ${topN} Closest Devices</h3>`;
           processedDevices.forEach(d => {
             results.innerHTML += `
               <div class="device">
                 <div class="device-name">${d.name}</div>
-                <div>📶 Avg RSSI: ${d.avgRSSI} dBm</div>
+                <div class="rssi">📶 Avg RSSI: ${d.avgRSSI} dBm</div>
               </div>
             `;
           });
 
         }, scanTime);
 
-      } catch (err) {
-        console.error(err);
-        results.textContent = "⚠️ Bluetooth scanning not supported or cancelled.";
+      } catch (error) {
+        console.error("Bluetooth scan error:", error);
+        if (error.name === 'NotFoundError' || error.message.includes("Bluetooth adapter")) {
+          results.textContent = "⚠️ Please turn on Bluetooth and allow scanning.";
+        } else if (error.name === 'NotAllowedError') {
+          results.textContent = "⚠️ Permission denied. Please allow Bluetooth access.";
+        } else {
+          results.textContent = "⚠️ Scan failed: " + error.message;
+        }
       }
     }
   </script>
